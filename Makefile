@@ -3,6 +3,13 @@
 # Handles auto-provisioning, deployment, and automated testing.
 # ==============================================================================
 
+# Load environment variables from .env file (ignore error if missing)
+-include .env
+export
+
+# Default Port if not specified in .env
+XRAY_PORT ?= 10808
+
 .PHONY: all
 all: deploy
 
@@ -42,7 +49,7 @@ debug:
 
 .PHONY: test
 test: test-1-config test-2-process test-3-ports test-4-network
-	@echo "\n[SUCCESS] ALL SYSTEMS GO! Module is ready."
+	@echo "\n[SUCCESS] ALL SYSTEMS GO! Module is ready on port $(XRAY_PORT)."
 
 .PHONY: test-1-config
 test-1-config:
@@ -57,12 +64,17 @@ test-2-process:
 .PHONY: test-3-ports
 test-3-ports:
 	@echo "\n[TEST 3/4] Verifying Listening Ports..."
-	@docker exec warp_proxy_module netstat -unlt | grep ":" || (echo "[FAIL] No ports listening"; exit 1)
+	@docker exec warp_proxy_module netstat -unlt | grep ":$(XRAY_PORT)" || (echo "[FAIL] Port $(XRAY_PORT) is not listening"; exit 1)
 
 .PHONY: test-4-network
 test-4-network:
-	@echo "\n[TEST 4/4] Verifying Network Connectivity..."
-	@docker exec -it warp_proxy_module /verify_network.sh
+	@echo "\n[TEST 4/4] Verifying Network Connectivity (IPv4 & IPv6)..."
+	@# IPv4 Check
+	@echo "   -> Checking IPv4 via 127.0.0.1:$(XRAY_PORT)..."
+	@docker exec -it warp_proxy_module curl -4 -v --max-time 10 -x socks5h://127.0.0.1:$(XRAY_PORT) https://www.cloudflare.com/cdn-cgi/trace || (echo "[FAIL] IPv4 Connection Failed"; exit 1)
+	@# IPv6 Check
+	@echo "   -> Checking IPv6 via [::1]:$(XRAY_PORT)..."
+	@docker exec -it warp_proxy_module curl -6 -v --max-time 10 -x socks5h://[::1]:$(XRAY_PORT) https://www.cloudflare.com/cdn-cgi/trace || (echo "[FAIL] IPv6 Connection Failed"; exit 1)
 
 .env:
 	@echo "[WARN] .env file not found. Creating from default template..."
