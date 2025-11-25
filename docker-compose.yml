@@ -4,17 +4,18 @@ services:
   warp:
     build:
       context: .
-    image: my-warp-proxy:latest # اسم ایمیج برای کش شدن
+    image: my-warp-proxy:latest
     container_name: warp_proxy_module
     restart: unless-stopped
-    # استفاده از بریج برای ایزوله بودن ماژول (استانداردتر از هاست است)
     ports:
-      - "10808:10808"
+      # Map Host Port to Container Port dynamically
+      - "${XRAY_PORT:-10808}:${XRAY_PORT:-10808}"
     volumes:
-      # ذخیره وضعیت اکانت
       - warp_data:/etc/xray/wgcf
     env_file:
       - .env
+    environment:
+      - XRAY_PORT=${XRAY_PORT:-10808}
     cap_add:
       - NET_ADMIN
     sysctls:

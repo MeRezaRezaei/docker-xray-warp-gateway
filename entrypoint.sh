@@ -7,16 +7,18 @@ WGCF_DIR="/etc/xray/wgcf"
 
 mkdir -p "$WGCF_DIR"
 
-# تنظیمات پیش‌فرض برای عبور از فیلترینگ
-# این IP معمولاً از دامین engage.cloudflareclient.com بهتر کار می‌کند
+# Defaults
 DEFAULT_PEER_END="162.159.193.10:2408"
 DEFAULT_PEER_PUB="bmXOC+F1FxEMF9dyiK2H5/1SUtzH0JuVo51h2wPfgyo="
+
+# Ensure XRAY_PORT has a value
+export XRAY_PORT="${XRAY_PORT:-10808}"
 
 sanitize() {
     tr -d ' \n\r'
 }
 
-echo "[INFO] Starting Warp Proxy Module..."
+echo "[INFO] Starting Warp Proxy Module on Port: $XRAY_PORT"
 
 # --- Logic: Determine Config Source ---
 
@@ -24,14 +26,14 @@ if [ -n "$WARP_PRIVATE_KEY" ]; then
     echo "[INFO] Mode: Manual Static Configuration"
     export FINAL_PRIVATE_KEY="$WARP_PRIVATE_KEY"
     export FINAL_ADDRESS_V4="$WARP_ADDRESS_V4"
-    # اگر اندپوینت دستی ست نشده بود، از IP سالم پیش‌فرض استفاده کن
+    # If endpoint not provided manually, use the default safe IP
     export FINAL_PEER_ENDPOINT="${WARP_PEER_ENDPOINT:-$DEFAULT_PEER_END}"
     export FINAL_PEER_PUBLIC_KEY="${WARP_PEER_PUBLIC_KEY:-$DEFAULT_PEER_PUB}"
 else
     echo "[INFO] Mode: WGCF Auto-Provisioning"
     cd "$WGCF_DIR"
 
-    # ثبت نام فقط در صورت نبود اکانت
+    # Register only if account doesn't exist
     if [ ! -f "wgcf-account.toml" ]; then
         if [ -n "$WARP_LICENSE_KEY" ]; then
             echo "[INFO] Registering with License Key..."
@@ -44,14 +46,14 @@ else
 
     wgcf generate > /dev/null
 
-    # استخراج هوشمند اطلاعات
+    # Smart extraction
     AUTO_PRIVATE_KEY=$(grep 'PrivateKey' wgcf-profile.conf | cut -d = -f 2 | sanitize)
     
-    # استخراج IPv4 با نادیده گرفتن خطوط IPv6 برای جلوگیری از کرش
+    # Extract IPv4 with robust parsing (handling multi-line addresses)
     RAW_ADDR_LINE=$(grep 'Address' wgcf-profile.conf | grep '\.' | head -n 1 | cut -d = -f 2)
     AUTO_ADDR_V4=$(echo "$RAW_ADDR_LINE" | tr ',' ' ' | awk '{print $1}' | sanitize)
     
-    # اندپوینت را فورس می‌کنیم روی IP سالم مگر اینکه کاربر دستی تغییر داده باشد
+    # Force safe endpoint
     AUTO_PEER_END="$DEFAULT_PEER_END"
     AUTO_PEER_PUB=$(grep 'PublicKey' wgcf-profile.conf | cut -d = -f 2 | sanitize)
 
@@ -69,6 +71,7 @@ if [ -z "$FINAL_PRIVATE_KEY" ] || [ -z "$FINAL_ADDRESS_V4" ]; then
 fi
 
 echo "[INFO] Using Endpoint: $FINAL_PEER_ENDPOINT"
+# envsubst now replaces ${XRAY_PORT} as well
 envsubst < "$TEMPLATE_FILE" > "$CONFIG_FILE"
 
 echo "[INFO] Starting Xray..."
