@@ -1,0 +1,51 @@
+{
+    "log": {
+        "loglevel": "warning"
+    },
+    "inbounds": [
+        {
+            "tag": "socks-in",
+            "port": 10808,
+            "listen": "0.0.0.0",
+            "protocol": "socks",
+            "settings": {
+                "auth": "noauth",
+                "udp": true
+            }
+        }
+    ],
+    "outbounds": [
+        {
+            "protocol": "wireguard",
+            "tag": "warp-out",
+            "settings": {
+                "secretKey": "${FINAL_PRIVATE_KEY}",
+                "address": [
+                    "${FINAL_ADDRESS_V4}"
+                ],
+                "peers": [
+                    {
+                        "publicKey": "${FINAL_PEER_PUBLIC_KEY}",
+                        "endpoint": "${FINAL_PEER_ENDPOINT}"
+                    }
+                ],
+                "mtu": 1280
+            }
+        },
+        {
+            "protocol": "freedom",
+            "tag": "direct"
+        }
+    ],
+    "routing": {
+        "rules": [
+            {
+                "type": "field",
+                "inboundTag": [
+                    "socks-in"
+                ],
+                "outboundTag": "warp-out"
+            }
+        ]
+    }
+}
