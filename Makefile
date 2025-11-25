@@ -3,13 +3,8 @@
 # Handles auto-provisioning, deployment, and automated testing.
 # ==============================================================================
 
-# Default target: Build, Run, Wait, and Test automatically
 .PHONY: all
 all: deploy
-
-# ------------------------------------------------------------------------------
-# Automation Logic
-# ------------------------------------------------------------------------------
 
 .PHONY: deploy
 deploy: up
@@ -17,10 +12,6 @@ deploy: up
 	@sleep 5
 	@echo "[INFO] Starting Automated Tests..."
 	@$(MAKE) test
-
-# ------------------------------------------------------------------------------
-# Core Operations
-# ------------------------------------------------------------------------------
 
 .PHONY: up
 up: .env
@@ -37,9 +28,17 @@ down:
 logs:
 	docker compose logs -f
 
-# ------------------------------------------------------------------------------
-# Granular Testing Suite
-# ------------------------------------------------------------------------------
+# --- DEBUGGING TOOLS ---
+
+.PHONY: debug
+debug:
+	@echo "\n================ CONFIGURATION DUMP ================"
+	@docker exec warp_proxy_module cat /etc/xray/config.json
+	@echo "\n================ XRAY ERROR LOGS (LAST 50) ================"
+	@docker exec warp_proxy_module tail -n 50 /var/log/xray/error.log
+	@echo "\n==========================================================="
+
+# --- TESTS ---
 
 .PHONY: test
 test: test-1-config test-2-process test-3-ports test-4-network
@@ -58,16 +57,12 @@ test-2-process:
 .PHONY: test-3-ports
 test-3-ports:
 	@echo "\n[TEST 3/4] Verifying Listening Ports..."
-	@docker exec warp_proxy_module netstat -an | grep LISTEN | grep ":" || (echo "[FAIL] No ports listening"; exit 1)
+	@docker exec warp_proxy_module netstat -unlt | grep ":" || (echo "[FAIL] No ports listening"; exit 1)
 
 .PHONY: test-4-network
 test-4-network:
 	@echo "\n[TEST 4/4] Verifying Network Connectivity..."
 	@docker exec -it warp_proxy_module /verify_network.sh
-
-# ------------------------------------------------------------------------------
-# Self-Healing Logic
-# ------------------------------------------------------------------------------
 
 .env:
 	@echo "[WARN] .env file not found. Creating from default template..."
