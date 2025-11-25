@@ -6,8 +6,12 @@ services:
     container_name: warp_proxy_module
     restart: unless-stopped
     ports:
+      # Bind to Host IPv4
       - "${XRAY_PORT:-10808}:${XRAY_PORT:-10808}/tcp"
       - "${XRAY_PORT:-10808}:${XRAY_PORT:-10808}/udp"
+      # Bind to Host IPv6 (Explicit)
+      - "[::]:${XRAY_PORT:-10808}:${XRAY_PORT:-10808}/tcp"
+      - "[::]:${XRAY_PORT:-10808}:${XRAY_PORT:-10808}/udp"
     volumes:
       - warp_data:/etc/xray/wgcf
     env_file:
