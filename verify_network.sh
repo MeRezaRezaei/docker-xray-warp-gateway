@@ -1,77 +1,88 @@
 #!/bin/sh
 
 # ============================================================
-# Network Verification Script for Xray-Warp Gateway
-# Checks: Socks5 Port -> Cloudflare Trace -> IP Geolocation
+# Robust Network Verification Script (IPv4 & IPv6)
 # ============================================================
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 CYAN='\033[0;36m'
-NC='\033[0m' # No Color
+NC='\033[0m'
 
-# Read port from Env or default to 10808
 PROXY_PORT="${XRAY_PORT:-10808}"
 PROXY_HOST="127.0.0.1"
 PROXY_URL="socks5h://${PROXY_HOST}:${PROXY_PORT}"
 
-echo -e "${CYAN}--- Starting Network Verification (Port: ${PROXY_PORT}) ---${NC}"
+echo -e "${CYAN}--- Starting Verification (Port: ${PROXY_PORT}) ---${NC}"
 
-# 1. Check if Xray port is listening (Relaxed Grep)
-# We use netstat -an to avoid DNS lookups and show numeric ports
-if netstat -an | grep "LISTEN" | grep -q ":${PROXY_PORT}"; then
+# Function to run curl with retry logic
+fetch_with_retry() {
+    local url=$1
+    local ipv=$2 # -4 or -6
+    local max_retries=3
+    local count=0
+    
+    while [ $count -lt $max_retries ]; do
+        # Use curl with proxy, specific IP version, and timeout
+        RESPONSE=$(curl -s $ipv --max-time 5 -x "$PROXY_URL" "$url")
+        RET=$?
+        
+        if [ $RET -eq 0 ] && [ -n "$RESPONSE" ]; then
+            echo "$RESPONSE"
+            return 0
+        fi
+        
+        count=$((count + 1))
+        echo -e "${YELLOW}   ...Attempt $count failed (Code $RET). Retrying in 2s...${NC}" >&2
+        sleep 2
+    done
+    return 1
+}
+
+# 1. Internal Port Check
+if netstat -unlt | grep -q ":${PROXY_PORT}"; then
     echo -e "${GREEN}[PASS] Port ${PROXY_PORT} is listening.${NC}"
 else
-    echo -e "${RED}[FAIL] Port ${PROXY_PORT} is NOT listening. Xray might be down.${NC}"
-    echo -e "${YELLOW}[DEBUG] Current Listening Ports:${NC}"
-    netstat -an | grep "LISTEN"
+    echo -e "${RED}[FAIL] Port ${PROXY_PORT} is NOT listening.${NC}"
     exit 1
 fi
 
-# 2. Check Connection to Cloudflare (Warp Status)
-echo -e "${YELLOW}[INFO] Checking Cloudflare Warp Status...${NC}"
-CF_TRACE=$(curl -s --max-time 10 -x "$PROXY_URL" https://www.cloudflare.com/cdn-cgi/trace)
+# 2. IPv4 Test (Cloudflare Trace)
+echo -e "${YELLOW}[TEST] Checking IPv4 connectivity...${NC}"
+TRACE_V4=$(fetch_with_retry "https://www.cloudflare.com/cdn-cgi/trace" "-4")
 
 if [ $? -eq 0 ]; then
-    WARP_STATUS=$(echo "$CF_TRACE" | grep "warp=" | cut -d= -f2)
-    IP_STATUS=$(echo "$CF_TRACE" | grep "ip=" | cut -d= -f2)
-    LOC_STATUS=$(echo "$CF_TRACE" | grep "loc=" | cut -d= -f2)
-
-    if [ "$WARP_STATUS" = "on" ]; then
-        echo -e "${GREEN}[PASS] Cloudflare Warp is ON.${NC}"
+    WARP=$(echo "$TRACE_V4" | grep "warp=" | cut -d= -f2)
+    IP=$(echo "$TRACE_V4" | grep "ip=" | cut -d= -f2)
+    LOC=$(echo "$TRACE_V4" | grep "loc=" | cut -d= -f2)
+    
+    if [ "$WARP" = "on" ]; then
+        echo -e "${GREEN}[PASS] IPv4 Warp is ON (IP: $IP, Loc: $LOC)${NC}"
     else
-        echo -e "${RED}[FAIL] Cloudflare Warp is OFF (warp=off).${NC}"
+        echo -e "${RED}[FAIL] IPv4 Warp is OFF!${NC}"
     fi
-    echo -e "       Edge IP: ${IP_STATUS}"
-    echo -e "       Location: ${LOC_STATUS}"
 else
-    echo -e "${RED}[FAIL] Could not connect to Cloudflare Trace. Check internet or proxy config.${NC}"
-    echo -e "${RED}       Error Detail: Failed to curl https://www.cloudflare.com/cdn-cgi/trace${NC}"
+    echo -e "${RED}[FAIL] IPv4 Connection Failed.${NC}"
 fi
 
-# 3. Check Public IP (External View)
-echo -e "${YELLOW}[INFO] Checking Public IP via ipinfo.io...${NC}"
-IP_INFO=$(curl -s --max-time 10 -x "$PROXY_URL" https://ipinfo.io/json)
+# 3. IPv6 Test (Cloudflare Trace)
+echo -e "${YELLOW}[TEST] Checking IPv6 connectivity...${NC}"
+# Note: Xray must handle the IPv6 routing via WireGuard even if container has no IPv6
+TRACE_V6=$(fetch_with_retry "https://www.cloudflare.com/cdn-cgi/trace" "-6")
 
 if [ $? -eq 0 ]; then
-    PUBLIC_IP=$(echo "$IP_INFO" | grep '"ip":' | cut -d '"' -f 4)
-    ORG=$(echo "$IP_INFO" | grep '"org":' | cut -d '"' -f 4)
-    COUNTRY=$(echo "$IP_INFO" | grep '"country":' | cut -d '"' -f 4)
-
-    echo -e "${GREEN}[PASS] External Connection Successful.${NC}"
-    echo -e "       Public IP: ${PUBLIC_IP}"
-    echo -e "       ISP/Org:   ${ORG}"
-    echo -e "       Country:   ${COUNTRY}"
+    WARP=$(echo "$TRACE_V6" | grep "warp=" | cut -d= -f2)
+    IP=$(echo "$TRACE_V6" | grep "ip=" | cut -d= -f2)
     
-    # Simple check to see if it's Cloudflare
-    if echo "$ORG" | grep -qi "Cloudflare"; then
-        echo -e "${GREEN}[SUCCESS] Traffic is routed through Cloudflare Network.${NC}"
+    if [ "$WARP" = "on" ]; then
+        echo -e "${GREEN}[PASS] IPv6 Warp is ON (IP: $IP)${NC}"
     else
-        echo -e "${YELLOW}[WARN] ISP does not look like Cloudflare. Verify routing.${NC}"
+        echo -e "${RED}[FAIL] IPv6 Warp is OFF!${NC}"
     fi
 else
-    echo -e "${RED}[FAIL] Could not fetch IP info from ipinfo.io.${NC}"
+    # IPv6 failure is warning, not critical, as some hosts disable it completely
+    echo -e "${YELLOW}[WARN] IPv6 Connection Failed (Expected if host has no IPv6 stack).${NC}"
 fi
 
 echo -e "${CYAN}--- Verification Finished ---${NC}"

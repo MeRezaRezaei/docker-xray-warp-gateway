@@ -2,7 +2,7 @@
     "log": {
         "access": "/var/log/xray/access.log",
         "error": "/var/log/xray/error.log",
-        "loglevel": "debug"
+        "loglevel": "warning"
     },
     "inbounds": [
         {
@@ -34,7 +34,7 @@
                 ],
                 "mtu": 1280,
                 "workers": 2,
-                "domainStrategy": "ForceIPv4"
+                "domainStrategy": "ForceIP"
             }
         },
         {
