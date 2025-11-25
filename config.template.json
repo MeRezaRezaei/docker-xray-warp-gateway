@@ -5,8 +5,7 @@
     "inbounds": [
         {
             "tag": "socks-in",
-            "port": ${XRAY_PORT
-            },
+            "port": 10808,
             "listen": "0.0.0.0",
             "protocol": "socks",
             "settings": {

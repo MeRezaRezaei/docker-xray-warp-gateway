@@ -26,14 +26,13 @@ if [ -n "$WARP_PRIVATE_KEY" ]; then
     echo "[INFO] Mode: Manual Static Configuration"
     export FINAL_PRIVATE_KEY="$WARP_PRIVATE_KEY"
     export FINAL_ADDRESS_V4="$WARP_ADDRESS_V4"
-    # If endpoint not provided manually, use the default safe IP
     export FINAL_PEER_ENDPOINT="${WARP_PEER_ENDPOINT:-$DEFAULT_PEER_END}"
     export FINAL_PEER_PUBLIC_KEY="${WARP_PEER_PUBLIC_KEY:-$DEFAULT_PEER_PUB}"
 else
     echo "[INFO] Mode: WGCF Auto-Provisioning"
     cd "$WGCF_DIR"
 
-    # Register only if account doesn't exist
+    # Step 1: Register (Only if account missing)
     if [ ! -f "wgcf-account.toml" ]; then
         if [ -n "$WARP_LICENSE_KEY" ]; then
             echo "[INFO] Registering with License Key..."
@@ -42,18 +41,26 @@ else
             echo "[INFO] Registering Free Account..."
             yes | wgcf register
         fi
+    else
+        echo "[INFO] Account found. Skipping registration."
     fi
 
-    wgcf generate > /dev/null
+    # Step 2: Generate Profile (Only if profile missing)
+    if [ ! -f "wgcf-profile.conf" ]; then
+        echo "[INFO] Generating WireGuard profile..."
+        wgcf generate > /dev/null
+    else
+        echo "[INFO] Profile found. Skipping generation."
+    fi
 
-    # Smart extraction
+    # Step 3: Extract Variables (Always run this, even if file existed)
+    echo "[INFO] Extracting credentials..."
+    
     AUTO_PRIVATE_KEY=$(grep 'PrivateKey' wgcf-profile.conf | cut -d = -f 2 | sanitize)
     
-    # Extract IPv4 with robust parsing (handling multi-line addresses)
     RAW_ADDR_LINE=$(grep 'Address' wgcf-profile.conf | grep '\.' | head -n 1 | cut -d = -f 2)
     AUTO_ADDR_V4=$(echo "$RAW_ADDR_LINE" | tr ',' ' ' | awk '{print $1}' | sanitize)
     
-    # Force safe endpoint
     AUTO_PEER_END="$DEFAULT_PEER_END"
     AUTO_PEER_PUB=$(grep 'PublicKey' wgcf-profile.conf | cut -d = -f 2 | sanitize)
 
@@ -72,8 +79,12 @@ fi
 
 echo "[INFO] Using Endpoint: $FINAL_PEER_ENDPOINT"
 
-# Inject variables
+# Step A: Inject String variables
 envsubst < "$TEMPLATE_FILE" > "$CONFIG_FILE"
+
+# Step B: Inject Integer Port using sed
+echo "[INFO] Applying dynamic port: $XRAY_PORT"
+sed -i "s/\"port\": 10808/\"port\": $XRAY_PORT/g" "$CONFIG_FILE"
 
 # --- DEBUG: Print Config to Logs ---
 echo "[DEBUG] --- Generated Configuration File Content ---"

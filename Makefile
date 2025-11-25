@@ -1,11 +1,22 @@
 # ==============================================================================
 # Survivor Module Makefile
-# Handles auto-provisioning and granular testing.
+# Handles auto-provisioning, deployment, and automated testing.
 # ==============================================================================
 
-# Default target
+# Default target: Build, Run, Wait, and Test automatically
 .PHONY: all
-all: up
+all: deploy
+
+# ------------------------------------------------------------------------------
+# Automation Logic
+# ------------------------------------------------------------------------------
+
+.PHONY: deploy
+deploy: up
+	@echo "[INFO] Waiting 5 seconds for Xray to initialize..."
+	@sleep 5
+	@echo "[INFO] Starting Automated Tests..."
+	@$(MAKE) test
 
 # ------------------------------------------------------------------------------
 # Core Operations
@@ -15,7 +26,7 @@ all: up
 up: .env
 	@echo "[INFO] Starting Warp Proxy Module..."
 	docker compose up -d --build
-	@echo "[SUCCESS] Module started."
+	@echo "[SUCCESS] Container started in background."
 
 .PHONY: down
 down:
@@ -27,34 +38,31 @@ logs:
 	docker compose logs -f
 
 # ------------------------------------------------------------------------------
-# Granular Testing Suite (The Puzzle Pieces)
+# Granular Testing Suite
 # ------------------------------------------------------------------------------
 
-# Test 1: Inspect the generated JSON config inside the container
+.PHONY: test
+test: test-1-config test-2-process test-3-ports test-4-network
+	@echo "\n[SUCCESS] ALL SYSTEMS GO! Module is ready."
+
 .PHONY: test-1-config
 test-1-config:
-	@echo "[TEST] dumping /etc/xray/config.json..."
-	@docker exec warp_proxy_module cat /etc/xray/config.json
-	@echo "\n[INFO] Check above: Is 'port' a number? Is 'address' filled?"
+	@echo "\n[TEST 1/4] Verifying Configuration File..."
+	@docker exec warp_proxy_module grep '"port":' /etc/xray/config.json || (echo "[FAIL] Config read error"; exit 1)
 
-# Test 2: Check if the Xray process is actually alive
 .PHONY: test-2-process
 test-2-process:
-	@echo "[TEST] Checking running processes..."
-	@docker exec warp_proxy_module ps aux
-	@echo "[INFO] You should see '/usr/bin/xray -config ...' above."
+	@echo "\n[TEST 2/4] Verifying Xray Process..."
+	@docker exec warp_proxy_module ps aux | grep xray | grep -v grep || (echo "[FAIL] Xray not running"; exit 1)
 
-# Test 3: Check network listening ports (Internal View)
 .PHONY: test-3-ports
 test-3-ports:
-	@echo "[TEST] Checking listening ports..."
-	@docker exec warp_proxy_module netstat -an | grep LISTEN
-	@echo "[INFO] You should see your XRAY_PORT (e.g., 10809) above."
+	@echo "\n[TEST 3/4] Verifying Listening Ports..."
+	@docker exec warp_proxy_module netstat -an | grep LISTEN | grep ":" || (echo "[FAIL] No ports listening"; exit 1)
 
-# Test 4: Full connectivity verification
 .PHONY: test-4-network
 test-4-network:
-	@echo "[TEST] Running connectivity script..."
+	@echo "\n[TEST 4/4] Verifying Network Connectivity..."
 	@docker exec -it warp_proxy_module /verify_network.sh
 
 # ------------------------------------------------------------------------------
