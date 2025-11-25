@@ -2,16 +2,23 @@
     "log": {
         "access": "/var/log/xray/access.log",
         "error": "/var/log/xray/error.log",
-        "loglevel": "warning"
+        "loglevel": "debug"
     },
     "inbounds": [
         {
-            "tag": "socks-in",
+            "tag": "socks-v4",
             "port": 54321,
-            "listen": [
-                "0.0.0.0",
-                "::"
-            ],
+            "listen": "0.0.0.0",
+            "protocol": "socks",
+            "settings": {
+                "auth": "noauth",
+                "udp": true
+            }
+        },
+        {
+            "tag": "socks-v6",
+            "port": 54321,
+            "listen": "::",
             "protocol": "socks",
             "settings": {
                 "auth": "noauth",
@@ -26,7 +33,8 @@
             "settings": {
                 "secretKey": "${FINAL_PRIVATE_KEY}",
                 "address": [
-                    "${FINAL_ADDRESS_V4}"
+                    "${FINAL_ADDRESS_V4}",
+                    "${FINAL_ADDRESS_V6}"
                 ],
                 "peers": [
                     {
@@ -50,7 +58,8 @@
             {
                 "type": "field",
                 "inboundTag": [
-                    "socks-in"
+                    "socks-v4",
+                    "socks-v6"
                 ],
                 "outboundTag": "warp-out"
             }
