@@ -18,11 +18,14 @@ PROXY_URL="socks5h://${PROXY_HOST}:${PROXY_PORT}"
 
 echo -e "${CYAN}--- Starting Network Verification (Port: ${PROXY_PORT}) ---${NC}"
 
-# 1. Check if Xray port is listening
-if netstat -tuln | grep -q ":${PROXY_PORT} "; then
+# 1. Check if Xray port is listening (Relaxed Grep)
+# We use netstat -an to avoid DNS lookups and show numeric ports
+if netstat -an | grep "LISTEN" | grep -q ":${PROXY_PORT}"; then
     echo -e "${GREEN}[PASS] Port ${PROXY_PORT} is listening.${NC}"
 else
     echo -e "${RED}[FAIL] Port ${PROXY_PORT} is NOT listening. Xray might be down.${NC}"
+    echo -e "${YELLOW}[DEBUG] Current Listening Ports:${NC}"
+    netstat -an | grep "LISTEN"
     exit 1
 fi
 

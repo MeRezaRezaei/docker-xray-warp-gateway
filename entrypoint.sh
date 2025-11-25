@@ -71,8 +71,14 @@ if [ -z "$FINAL_PRIVATE_KEY" ] || [ -z "$FINAL_ADDRESS_V4" ]; then
 fi
 
 echo "[INFO] Using Endpoint: $FINAL_PEER_ENDPOINT"
-# envsubst now replaces ${XRAY_PORT} as well
+
+# Inject variables
 envsubst < "$TEMPLATE_FILE" > "$CONFIG_FILE"
+
+# --- DEBUG: Print Config to Logs ---
+echo "[DEBUG] --- Generated Configuration File Content ---"
+cat "$CONFIG_FILE"
+echo "[DEBUG] --------------------------------------------"
 
 echo "[INFO] Starting Xray..."
 exec /usr/bin/xray -config "$CONFIG_FILE"
