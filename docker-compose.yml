@@ -3,28 +3,37 @@ services:
     build:
       context: .
     image: my-warp-proxy:latest
-    container_name: warp_proxy_module
+    container_name: nexus-warp_proxy_module
     restart: unless-stopped
+
+    networks:
+      - nexus-network
+
     ports:
-      # Bind to Host IPv4
       - "${XRAY_PORT:-10808}:${XRAY_PORT:-10808}/tcp"
       - "${XRAY_PORT:-10808}:${XRAY_PORT:-10808}/udp"
+
     volumes:
-      - warp_data:/etc/xray/wgcf
-    env_file:
-      - .env
+      - ./warp_data:/etc/xray/wgcf
+      - ./logs:/var/log/xray:rw
+      - ./entrypoint.sh:/root/entrypoint.sh:ro
     environment:
       - XRAY_PORT=${XRAY_PORT:-10808}
+      - WARP_LICENSE_KEY=${WARP_LICENSE_KEY:-}
+      - WARP_PRIVATE_KEY=${WARP_PRIVATE_KEY:-}
+      - WARP_ADDRESS_V4=${WARP_ADDRESS_V4:-}
+      - WARP_ADDRESS_V6=${WARP_ADDRESS_V6:-}
+      - WARP_PEER_PUBLIC_KEY=${WARP_PEER_PUBLIC_KEY:-}
+      - WARP_PEER_ENDPOINT=${WARP_PEER_ENDPOINT:-}
+
     cap_add:
       - NET_ADMIN
       - SYS_MODULE
     sysctls:
-      # IPv4 Forwarding
       - net.ipv4.ip_forward=1
       - net.ipv4.conf.all.src_valid_mark=1
       - net.ipv4.conf.all.rp_filter=0
       - net.ipv4.conf.default.rp_filter=0
-      # IPv6 Forwarding
       - net.ipv6.conf.all.forwarding=1
       - net.ipv6.conf.default.forwarding=1
       - net.ipv6.conf.all.disable_ipv6=0

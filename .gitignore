@@ -1,3 +1,6 @@
 .env
 wgcf/*
 debug.sh
+warp_data
+
+logs

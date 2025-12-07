@@ -16,4 +16,6 @@ COPY config.template.json /etc/xray/config.template.json
 RUN chmod +x /entrypoint.sh
 RUN chmod +x /verify_network.sh
 
+RUN pwd
+
 ENTRYPOINT ["/entrypoint.sh"]
